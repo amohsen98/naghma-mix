@@ -1,0 +1,141 @@
+# Naghma Mix: full stack on one machine.
+#   docker compose up --build            → app on http://localhost:8080
+#   docker compose up -d postgres kafka kafka-init minio keys
+#                                         → infrastructure only, for running services in dev mode
+name: naghma-mix
+
+x-jvm-service: &jvm-service
+  restart: unless-stopped
+  depends_on:
+    postgres: { condition: service_healthy }
+    keys: { condition: service_completed_successfully }
+  environment: &jvm-env
+    DB_URL: jdbc:postgresql://postgres:5432/naghma
+    DB_USER: naghma
+    DB_PASSWORD: naghma
+    JWT_PUBLIC_KEY: file:/keys/publicKey.pem
+  volumes:
+    - ./infra/keys:/keys:ro
+
+services:
+  keys:
+    image: alpine:3.20
+    command: sh -c "apk add --no-cache openssl >/dev/null && sh /infra/gen-keys.sh"
+    volumes:
+      - ./infra:/infra
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: naghma
+      POSTGRES_USER: naghma
+      POSTGRES_PASSWORD: naghma
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U naghma -d naghma"]
+      interval: 5s
+      retries: 20
+
+  kafka:
+    image: apache/kafka:3.8.0
+    ports: ["29092:29092"]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 5s
+      retries: 30
+
+  # Topics are created explicitly: partitions bound how many workers can analyze in parallel.
+  kafka-init:
+    image: apache/kafka:3.8.0
+    depends_on:
+      kafka: { condition: service_healthy }
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        for t in analysis.jobs:6 analysis.results:3 analysis.jobs.dlq:1 analysis.results.dlq:1; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
+            --topic "$${t%%:*}" --partitions "$${t##*:}" --replication-factor 1
+        done
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports: ["9000:9000", "9001:9001"]
+    environment:
+      MINIO_ROOT_USER: naghma
+      MINIO_ROOT_PASSWORD: naghma-dev-secret
+      MINIO_API_CORS_ALLOW_ORIGIN: "http://localhost:8080,http://localhost:5173"
+    volumes: [miniodata:/data]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      retries: 20
+
+  accounts:
+    <<: *jvm-service
+    build: { context: ./backend, dockerfile: Dockerfile, args: { MODULE: accounts-service } }
+    environment:
+      <<: *jvm-env
+      JWT_PRIVATE_KEY: file:/keys/privateKey.pem
+      PUBLIC_URL: http://localhost:8080
+      BILLING_WEBHOOK_SECRET: dev-webhook-secret-change-me
+
+  catalog:
+    <<: *jvm-service
+    build: { context: ./backend, dockerfile: Dockerfile, args: { MODULE: catalog-service } }
+    depends_on:
+      postgres: { condition: service_healthy }
+      keys: { condition: service_completed_successfully }
+      kafka-init: { condition: service_completed_successfully }
+      minio: { condition: service_healthy }
+    environment:
+      <<: *jvm-env
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: http://localhost:9000   # presigned URLs are opened by the browser
+      S3_ACCESS_KEY: naghma
+      S3_SECRET_KEY: naghma-dev-secret
+
+  mix:
+    <<: *jvm-service
+    build: { context: ./backend, dockerfile: Dockerfile, args: { MODULE: mix-service } }
+    environment:
+      <<: *jvm-env
+      CATALOG_URL: http://catalog:8082
+
+  worker:
+    build: ./worker
+    restart: unless-stopped
+    deploy:
+      replicas: 2   # scale with: docker compose up --scale worker=4 (up to 6 = job partitions)
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+      minio: { condition: service_healthy }
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: naghma
+      S3_SECRET_KEY: naghma-dev-secret
+
+  web:
+    build: ./web
+    ports: ["8080:80"]
+    depends_on: [accounts, catalog, mix]
+
+volumes:
+  pgdata:
+  miniodata:
