@@ -185,7 +185,7 @@ public final class TransitionScorer {
         return Math.max(0.0, Math.min(1.0, v));
     }
 
-    static double round(double v) {
+    public static double round(double v) {
         return Math.round(v * 1000.0) / 1000.0;
     }
 
