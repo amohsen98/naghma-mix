@@ -125,3 +125,35 @@ def test_worker_sends_malformed_job_to_dlq():
     w = _worker(lambda job: {})
     w.handle(b"not json")
     assert [t for t, _, _ in w.producer.sent] == ["analysis.jobs.dlq"]
+
+
+def test_maqam_journey_follows_a_modulation():
+    # 60 s in Ajam on F, then 60 s in Sikah on E half-flat: the journey should show both,
+    # in order, at about the right place.
+    y = np.concatenate([
+        synth.melody("Ajam", 500, seconds=60, seed=3),
+        synth.melody("Sikah", 350, seconds=60, seed=5),
+    ])
+    journey = analyze.analyze_signal(y)["maqamTimeline"]
+    names = [s["maqam"] for s in journey]
+    assert names == ["Ajam", "Sikah"], journey
+    assert journey[0]["start"] == 0.0 and journey[1]["start"] == 60.0
+    assert journey[1]["tonicNote"] == "E half-flat"
+    assert journey[1]["arabic"] == "سيكاه"
+
+
+def test_journey_marks_windows_without_melody():
+    t = np.arange(int(30 * synth.SR)) / synth.SR
+    clicks = (np.sin(2 * np.pi * 1800 * t) * (np.mod(t, 0.5) < 0.02)).astype(np.float32) * 0.5
+    y = np.concatenate([synth.melody("Hijaz", 200, seconds=30, seed=3), clicks])
+    journey = analyze.analyze_signal(y)["maqamTimeline"]
+    assert journey[0]["maqam"] == "Hijaz"
+    assert journey[-1]["maqam"] is None
+
+
+def test_short_tail_is_folded_into_the_last_window():
+    times = np.linspace(0, 64, 5000)
+    cents = np.full_like(times, 200.0)
+    from naghma_worker import maqam as m
+    windows = [round(w["end"] - w["start"]) for w in m.timeline(times, cents, np.full_like(times, 293.0), 64.0)]
+    assert sum(windows) == 64 and len(windows) <= 2

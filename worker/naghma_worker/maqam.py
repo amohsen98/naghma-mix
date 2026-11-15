@@ -242,6 +242,68 @@ def classify(cents: np.ndarray, median_hz: float | None = None) -> MaqamResult:
     )
 
 
+TIMELINE_WINDOW_S = 30.0
+SAME_TONIC_CENTS = 30.0
+
+
+def timeline(times: np.ndarray, cents: np.ndarray, hz: np.ndarray, duration: float,
+             window: float = TIMELINE_WINDOW_S) -> list[dict]:
+    """The maqam journey: classify each ~30 s window, then merge neighbours that agree.
+
+    Arabic songs often modulate (a verse in Ajam, a couplet in Sikah, back to Ajam), so
+    one label for the whole song hides what a listener hears. Windows with too little
+    sung or played melody come back with maqam None ("no melody": rap, drum breaks,
+    intros), so they don't pretend to know.
+    """
+    if duration <= 0:
+        return []
+    edges = list(np.arange(0.0, duration, window)) + [duration]
+    # fold a short tail into the previous window instead of judging 5 seconds alone
+    if len(edges) > 2 and edges[-1] - edges[-2] < window / 2:
+        edges.pop(-2)
+    windows = []
+    for start, end in zip(edges[:-1], edges[1:]):
+        sel = (times >= start) & (times < end)
+        r = classify(cents[sel], float(np.median(hz[sel])) if sel.any() else None)
+        windows.append({
+            "start": round(float(start), 1),
+            "end": round(float(end), 1),
+            "maqam": r.name or None,
+            "arabic": MAQAMAT[r.name].arabic if r.name else None,
+            "tonicNote": r.tonic_note or None,
+            "tonicCents": round(r.tonic_cents, 1) if r.name else None,
+            "confidence": round(r.confidence, 3),
+            "uncertain": r.uncertain,
+        })
+    return _merge(windows)
+
+
+def _same(a: dict, b: dict) -> bool:
+    if a["maqam"] is None or b["maqam"] is None:
+        return a["maqam"] is None and b["maqam"] is None
+    if a["maqam"] != b["maqam"]:
+        return False
+    d = abs(((a["tonicCents"] - b["tonicCents"]) + 600) % 1200 - 600)
+    return d < SAME_TONIC_CENTS
+
+
+def _merge(windows: list[dict]) -> list[dict]:
+    merged: list[dict] = []
+    for w in windows:
+        if merged and _same(merged[-1], w):
+            m = merged[-1]
+            n = m.pop("_n", 1)
+            m["end"] = w["end"]
+            m["confidence"] = round((m["confidence"] * n + w["confidence"]) / (n + 1), 3)
+            m["uncertain"] = m["uncertain"] and w["uncertain"]
+            m["_n"] = n + 1
+        else:
+            merged.append(dict(w))
+    for m in merged:
+        m.pop("_n", None)
+    return merged
+
+
 def _tonic_hz(tonic_pc: float, median_hz: float | None) -> float:
     hz = C4_HZ * 2 ** (tonic_pc / 1200.0)
     if median_hz:

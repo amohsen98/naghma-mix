@@ -15,6 +15,8 @@ log = logging.getLogger(__name__)
 
 SR = 22050
 MAQAM_EXCERPT_S = 90.0
+MAQAM_MAX_TRACK_S = 480.0  # pitch-track at most 8 minutes for the maqam journey
+HOP = 512
 BEATS_PER_SEGMENT = 32  # 8 bars of 4/4
 ANALYZER_VERSION = "naghma-analyzer-0.1"
 
@@ -71,9 +73,13 @@ def analyze_signal(y: np.ndarray, timer: Timer | None = None) -> dict:
         key = tonal.detect_key(chroma.mean(axis=1))
 
     with timer.stage("maqam"):
-        excerpt = _middle_excerpt(y_harm, MAQAM_EXCERPT_S)
-        cents, median_hz = melody_cents(excerpt)
-        mq = maqam.classify(cents, median_hz)
+        times, cents, hz = melody_track(y_harm[: int(MAQAM_MAX_TRACK_S * SR)])
+        # The overall label still comes from the middle of the song, where the main
+        # maqam usually sits; the journey covers the whole track.
+        mid_start = max(0.0, (duration - MAQAM_EXCERPT_S) / 2)
+        mid = (times >= mid_start) & (times < mid_start + MAQAM_EXCERPT_S)
+        mq = maqam.classify(cents[mid], float(np.median(hz[mid])) if mid.any() else None)
+        journey = maqam.timeline(times, cents, hz, min(duration, MAQAM_MAX_TRACK_S))
 
     return {
         "analyzerVersion": ANALYZER_VERSION,
@@ -88,6 +94,7 @@ def analyze_signal(y: np.ndarray, timer: Timer | None = None) -> dict:
         "key": key,
         "maqam": mq.to_dict(),
         "pitchHistogram": mq.histogram,
+        "maqamTimeline": journey,
     }
 
 
@@ -104,15 +111,21 @@ def isolate_melody(y: np.ndarray) -> np.ndarray:
     return librosa.effects.harmonic(y, margin=2.0)
 
 
-def melody_cents(y: np.ndarray) -> tuple[np.ndarray, float | None]:
+def melody_track(y: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Confidently voiced melody frames: (times in s, pitch in cents re C4, pitch in Hz)."""
     f0, voiced, prob = librosa.pyin(
-        y, fmin=80.0, fmax=1000.0, sr=SR, frame_length=2048, hop_length=512
+        y, fmin=80.0, fmax=1000.0, sr=SR, frame_length=2048, hop_length=HOP
     )
+    times = librosa.times_like(f0, sr=SR, hop_length=HOP)
     mask = voiced & np.isfinite(f0) & (prob > 0.3)
-    f = f0[mask]
-    if f.size == 0:
+    return times[mask], maqam.hz_to_cents(f0[mask]), f0[mask]
+
+
+def melody_cents(y: np.ndarray) -> tuple[np.ndarray, float | None]:
+    _, cents, hz = melody_track(y)
+    if hz.size == 0:
         return np.array([]), None
-    return maqam.hz_to_cents(f), float(np.median(f))
+    return cents, float(np.median(hz))
 
 
 def energy_curve(y: np.ndarray, beat_times: np.ndarray, duration: float) -> list[dict]:
