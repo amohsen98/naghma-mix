@@ -75,6 +75,8 @@ cd web && npm test                                                        # reas
 cd backend && mvn test                                                    # domain unit tests + @QuarkusTest (Docker needed for Dev Services)
 ```
 
+On Docker Engine 29 or newer, run `echo "api.version=1.44" > ~/.docker-java.properties` once, or Dev Services cannot reach Docker.
+
 The worker tests synthesize melodies in each maqam (quarter tones and vibrato included) over a click track. They check maqam, tonic (±20 cents), tonality, BPM (±2%), key detection on chord progressions, and the worker's retry and dead-letter behaviour. No copyrighted audio is needed.
 
 ## Analyze your own files (the Gate 1 experiment)

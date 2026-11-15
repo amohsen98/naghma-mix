@@ -14,14 +14,18 @@ jobs:
     name: Backend (Quarkus)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
           cache: maven
       - name: Generate JWT keys for tests
         run: sh infra/gen-keys.sh
+      # Testcontainers 1.20 (bundled with Quarkus 3.15) asks Docker for API 1.32, which
+      # Docker Engine 29 rejects; pin a version the engine accepts.
+      - name: Pin Docker API version for Testcontainers
+        run: echo "api.version=1.44" > ~/.docker-java.properties
       # @QuarkusTest starts PostgreSQL and Kafka through Dev Services (Docker is available on the runner)
       - name: Build and test
         run: mvn -B -ntp -f backend/pom.xml verify
@@ -33,7 +37,7 @@ jobs:
       run:
         working-directory: worker
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -49,7 +53,7 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -63,7 +67,7 @@ jobs:
     name: Compose files
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: docker compose config --quiet
       - name: Production overlay
         run: |
