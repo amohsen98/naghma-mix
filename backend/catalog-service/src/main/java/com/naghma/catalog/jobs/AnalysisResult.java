@@ -25,6 +25,7 @@ public record AnalysisResult(
         Key key,
         Maqam maqam,
         List<Double> pitchHistogram,
+        List<Analysis.MaqamSection> maqamTimeline,
         Map<String, Integer> timingsMs) {
 
     @JsonIgnoreProperties(ignoreUnknown = true)

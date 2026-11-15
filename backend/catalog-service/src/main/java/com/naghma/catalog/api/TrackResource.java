@@ -90,6 +90,7 @@ public class TrackResource {
                 a == null ? null : a.tonicCents,
                 a == null ? null : a.quarterToneRatio,
                 a == null ? List.of() : a.pitchHistogram,
+                a == null || a.maqamTimeline == null ? List.of() : a.maqamTimeline,
                 a == null ? null : a.modelVersion);
     }
 

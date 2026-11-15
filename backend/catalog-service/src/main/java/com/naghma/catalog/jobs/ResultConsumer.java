@@ -11,6 +11,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 
@@ -75,6 +76,7 @@ public class ResultConsumer {
         a.energyCurve = r.energyCurve();
         a.beatTimes = r.beatTimes();
         a.pitchHistogram = r.pitchHistogram();
+        a.maqamTimeline = r.maqamTimeline() == null ? List.of() : r.maqamTimeline();
         a.timings = r.timingsMs();
         if (!edited.contains("bpm")) {
             a.bpm = r.bpm();

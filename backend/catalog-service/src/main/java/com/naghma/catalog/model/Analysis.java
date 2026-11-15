@@ -22,6 +22,10 @@ public class Analysis extends PanacheEntityBase {
 
     public record Candidate(String name, String arabic, double confidence) {}
 
+    /** One stretch of the song in a single maqam; maqam is null where there is no clear melody. */
+    public record MaqamSection(double start, double end, String maqam, String arabic, String tonicNote,
+                               Double tonicCents, Double confidence, Boolean uncertain) {}
+
     @Id
     @Column(name = "track_id")
     public UUID trackId;
@@ -90,6 +94,11 @@ public class Analysis extends PanacheEntityBase {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "pitch_histogram")
     public List<Double> pitchHistogram;
+
+    /** The maqam journey across the song, about 30 s per window, merged where it doesn't change. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "maqam_timeline")
+    public List<MaqamSection> maqamTimeline;
 
     @JdbcTypeCode(SqlTypes.JSON)
     public Map<String, Integer> timings;

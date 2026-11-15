@@ -56,7 +56,8 @@ public final class Views {
 
     public record TrackDetail(TrackView track, List<Analysis.EnergyPoint> energyCurve,
                               List<Analysis.Candidate> maqamCandidates, Double tonicHz, Double tonicCents,
-                              Double quarterToneRatio, List<Double> pitchHistogram, String modelVersion) {}
+                              Double quarterToneRatio, List<Double> pitchHistogram,
+                              List<Analysis.MaqamSection> maqamTimeline, String modelVersion) {}
 
     /** Compact features for the mix service. */
     public record Features(UUID id, String title, String artist, String filename, Double durationSec, Double bpm,
