@@ -19,6 +19,9 @@ import org.eclipse.microprofile.reactive.messaging.Message;
  * the relay without sending a row twice; a row is marked sent only after Kafka acked it.
  * If the relay crashes after the ack but before the commit, the row is sent again, which
  * is why the worker and the result consumer are idempotent by jobId.
+ *
+ * The query is native SQL (Hibernate's query language has no SKIP LOCKED), so the schema
+ * is not applied automatically: {h-schema} expands to the configured default schema.
  */
 @ApplicationScoped
 public class OutboxRelay {
@@ -37,7 +40,7 @@ public class OutboxRelay {
     void relay() {
         @SuppressWarnings("unchecked")
         List<OutboxEvent> batch = em.createNativeQuery(
-                        "SELECT * FROM outbox WHERE sent_at IS NULL ORDER BY id LIMIT :n FOR UPDATE SKIP LOCKED",
+                        "SELECT * FROM {h-schema}outbox WHERE sent_at IS NULL ORDER BY id LIMIT :n FOR UPDATE SKIP LOCKED",
                         OutboxEvent.class)
                 .setParameter("n", BATCH)
                 .getResultList();
