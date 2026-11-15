@@ -1,0 +1,18 @@
+[project]
+name = "naghma-worker"
+version = "0.1.0"
+description = "Naghma Mix analysis worker: BPM, key, energy and maqam detection"
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+demucs = ["demucs>=4.0"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+naghma-analyze = "naghma_worker.cli:main"
+naghma-worker = "naghma_worker.main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore::UserWarning", "ignore::FutureWarning"]

@@ -1,0 +1,7 @@
+librosa==0.11.0
+soundfile>=0.12
+pyloudnorm==0.1.1
+numpy>=1.26
+scipy>=1.11
+confluent-kafka>=2.5
+boto3>=1.34
