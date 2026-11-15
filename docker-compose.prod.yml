@@ -1,0 +1,106 @@
+# Production overrides, used on the server together with docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
+#
+# - runs the images CI pushed to GitHub Container Registry instead of building locally
+# - puts Caddy in front for automatic HTTPS (app on $DOMAIN, uploads on s3.$DOMAIN)
+# - closes every other port to the internet
+# - reads secrets from .env (created by infra/deploy/bootstrap.sh)
+# - sized for Oracle Cloud's Always Free Arm VM: 2 OCPU, 12 GB RAM
+
+x-image: &image-defaults
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  caddy:
+    <<: *image-defaults
+    image: caddy:2-alpine
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    volumes:
+      - ./infra/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [web, minio]
+
+  postgres:
+    <<: *image-defaults
+    ports: !reset []
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    deploy:
+      resources: { limits: { memory: 1g } }
+
+  kafka:
+    <<: *image-defaults
+    ports: !reset []
+    environment:
+      KAFKA_HEAP_OPTS: "-Xms384m -Xmx384m"
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://kafka:29092
+      KAFKA_LOG_RETENTION_HOURS: 72
+    deploy:
+      resources: { limits: { memory: 900m } }
+
+  minio:
+    <<: *image-defaults
+    ports: !reset []
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
+      MINIO_API_CORS_ALLOW_ORIGIN: https://${DOMAIN}
+    deploy:
+      resources: { limits: { memory: 600m } }
+
+  accounts:
+    <<: *image-defaults
+    image: ghcr.io/${GH_OWNER:-amohsen98}/naghma-mix-accounts:${TAG:-latest}
+    environment:
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      PUBLIC_URL: https://${DOMAIN}
+      BILLING_WEBHOOK_SECRET: ${BILLING_WEBHOOK_SECRET:?set BILLING_WEBHOOK_SECRET in .env}
+      JAVA_OPTS: "-Xmx256m -XX:+UseSerialGC"
+    deploy:
+      resources: { limits: { memory: 512m } }
+
+  catalog:
+    <<: *image-defaults
+    image: ghcr.io/${GH_OWNER:-amohsen98}/naghma-mix-catalog:${TAG:-latest}
+    environment:
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_PUBLIC_ENDPOINT: https://s3.${DOMAIN}
+      JAVA_OPTS: "-Xmx320m -XX:+UseSerialGC"
+    deploy:
+      resources: { limits: { memory: 640m } }
+
+  mix:
+    <<: *image-defaults
+    image: ghcr.io/${GH_OWNER:-amohsen98}/naghma-mix-mix:${TAG:-latest}
+    environment:
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      JAVA_OPTS: "-Xmx256m -XX:+UseSerialGC"
+    deploy:
+      resources: { limits: { memory: 512m } }
+
+  worker:
+    <<: *image-defaults
+    image: ghcr.io/${GH_OWNER:-amohsen98}/naghma-mix-worker:${TAG:-latest}
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}
+      resources: { limits: { memory: 1500m } }
+
+  web:
+    <<: *image-defaults
+    image: ghcr.io/${GH_OWNER:-amohsen98}/naghma-mix-web:${TAG:-latest}
+    ports: !reset []
+
+volumes:
+  caddy-data:
+  caddy-config:

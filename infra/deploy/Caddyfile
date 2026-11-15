@@ -1,0 +1,12 @@
+# Caddy gets and renews Let's Encrypt certificates for both names automatically.
+
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:80
+}
+
+# Browsers upload audio here with presigned URLs. Caddy keeps the Host header, which the
+# S3 signature covers, so the URL catalog-service signed stays valid.
+s3.{$DOMAIN} {
+	reverse_proxy minio:9000
+}
