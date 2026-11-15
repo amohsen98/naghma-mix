@@ -18,7 +18,7 @@ MAQAM_EXCERPT_S = 90.0
 MAQAM_MAX_TRACK_S = 480.0  # pitch-track at most 8 minutes for the maqam journey
 HOP = 512
 BEATS_PER_SEGMENT = 32  # 8 bars of 4/4
-ANALYZER_VERSION = "naghma-analyzer-0.1"
+ANALYZER_VERSION = "naghma-analyzer-0.2"
 
 
 class Timer:
@@ -118,7 +118,10 @@ def melody_track(y: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     )
     times = librosa.times_like(f0, sr=SR, hop_length=HOP)
     mask = voiced & np.isfinite(f0) & (prob > 0.3)
-    return times[mask], maqam.hz_to_cents(f0[mask]), f0[mask]
+    cents = np.full(f0.shape, np.nan)
+    cents[mask] = maqam.hz_to_cents(f0[mask])
+    cents = maqam.smooth_vibrato(cents)
+    return times[mask], cents[mask], f0[mask]
 
 
 def melody_cents(y: np.ndarray) -> tuple[np.ndarray, float | None]:

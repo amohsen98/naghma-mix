@@ -27,6 +27,7 @@ def melody(
     bpm: float = 120.0,
     seed: int = 7,
     sr: int = SR,
+    vibrato_cents: float = 8.0,
 ) -> np.ndarray:
     """A stepwise random-walk melody that keeps returning to the tonic, plus clicks on beats."""
     scale = MAQAMAT.get(scale_name) or WESTERN[scale_name]
@@ -42,7 +43,7 @@ def melody(
         else:
             i = int(np.clip(i + rng.choice([-1, 1, 1, -2, 2]), 0, len(degrees) - 1))
         f = C4_HZ * 2 ** ((tonic_cents + degrees[i]) / 1200.0)
-        seg = tone(f, min(dur, seconds - pos), sr)
+        seg = tone(f, min(dur, seconds - pos), sr, vibrato_cents)
         s = int(pos * sr)
         out[s : s + len(seg)] += 0.3 * seg[: len(out) - s]
         pos += dur

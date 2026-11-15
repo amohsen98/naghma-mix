@@ -110,6 +110,31 @@ def hz_to_cents(f0: np.ndarray) -> np.ndarray:
     return 1200.0 * np.log2(f0 / C4_HZ)
 
 
+VIBRATO_FRAMES = 9  # ~210 ms at hop 512 / 22.05 kHz: one cycle of a 4.5-7 Hz vibrato
+
+
+def smooth_vibrato(cents: np.ndarray, frames: int = VIBRATO_FRAMES) -> np.ndarray:
+    """Average the pitch over one vibrato cycle, within each voiced run (NaN = unvoiced).
+
+    A singer's vibrato swings 40-80 cents around the note several times a second. Raw
+    frames then rarely look "stable", and the ones that do are the turning points of the
+    swing, half a semitone off the note, which reads as quarter tones. Averaging over a
+    cycle puts the voice back on the note it is singing. Runs are not smoothed across
+    silences, so separate notes don't bleed into each other.
+    """
+    out = np.array(cents, dtype=float, copy=True)
+    valid = np.isfinite(out)
+    edges = np.flatnonzero(np.diff(np.concatenate([[0], valid.astype(int), [0]])))
+    kernel = np.ones(frames) / frames
+    for s, e in zip(edges[::2], edges[1::2]):
+        seg = out[s:e]
+        if seg.size < 3:
+            continue
+        k = kernel if seg.size >= frames else np.ones(seg.size) / seg.size
+        out[s:e] = np.convolve(seg, k, mode="same") / np.convolve(np.ones_like(seg), k, mode="same")
+    return out
+
+
 def stable_frames(cents: np.ndarray, window: int = 5, max_spread: float = 30.0) -> np.ndarray:
     """Mask of frames whose pitch stays within max_spread cents over a short window."""
     if cents.size < window:

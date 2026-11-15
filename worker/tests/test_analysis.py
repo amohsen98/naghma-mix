@@ -157,3 +157,23 @@ def test_short_tail_is_folded_into_the_last_window():
     from naghma_worker import maqam as m
     windows = [round(w["end"] - w["start"]) for w in m.timeline(times, cents, np.full_like(times, 293.0), 64.0)]
     assert sum(windows) == 64 and len(windows) <= 2
+
+
+@pytest.mark.parametrize("vibrato", [30, 50, 70])
+def test_pop_vibrato_is_not_mistaken_for_quarter_tones(vibrato):
+    # A belting pop voice swings ±40-80 cents. Before smoothing, only the turning points of
+    # the swing looked "stable", half a semitone off the note: a D minor ballad came out as
+    # Saba and most of the song as "no melody".
+    y = synth.melody("minor", 200, seconds=60, seed=4, vibrato_cents=vibrato)
+    out = analyze.analyze_signal(y)
+    assert out["tonality"] == "WESTERN"
+    assert out["maqam"]["quarterToneRatio"] < 0.05
+    assert all(s["maqam"] for s in out["maqamTimeline"]), out["maqamTimeline"]
+
+
+@pytest.mark.parametrize("name,tonic", [("Bayati", 200), ("Sikah", 350), ("Rast", 0)])
+def test_quarter_tones_survive_heavy_vibrato(name, tonic):
+    y = synth.melody(name, tonic, seconds=40, seed=4, vibrato_cents=50)
+    out = analyze.analyze_signal(y)
+    assert out["tonality"] == "ARABIC_MODAL"
+    assert out["maqam"]["name"] == name
