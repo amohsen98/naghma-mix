@@ -1,6 +1,6 @@
 # Naghma Mix: full stack on one machine.
 #   docker compose up --build            → app on http://localhost:8080
-#   docker compose up -d postgres kafka kafka-init minio keys
+#   docker compose up -d postgres kafka kafka-init storage keys
 #                                         → infrastructure only, for running services in dev mode
 name: naghma-mix
 
@@ -71,18 +71,31 @@ services:
             --topic "$${t%%:*}" --partitions "$${t##*:}" --replication-factor 1
         done
 
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
+  # S3-compatible object storage. RustFS replaces MinIO, whose images are no longer
+  # published. Browsers never call it directly: uploads go through the web app's own
+  # address (see web/nginx.conf), so no CORS setup is needed.
+  storage-init:
+    image: alpine:3.20
+    command: chown -R 10001:10001 /data   # RustFS runs as uid 10001
+    volumes: [storagedata:/data]
+
+  storage:
+    image: rustfs/rustfs:1.0.0
+    depends_on:
+      storage-init: { condition: service_completed_successfully }
     ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
     environment:
-      MINIO_ROOT_USER: naghma
-      MINIO_ROOT_PASSWORD: naghma-dev-secret
-      MINIO_API_CORS_ALLOW_ORIGIN: "http://localhost:8080,http://localhost:5173"
-    volumes: [miniodata:/data]
+      RUSTFS_ACCESS_KEY: naghma
+      RUSTFS_SECRET_KEY: naghma-dev-secret
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+    volumes: [storagedata:/data]
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD-SHELL", "curl -fs http://localhost:9000/health >/dev/null"]
       interval: 5s
+      start_period: 20s
       retries: 20
 
   accounts:
@@ -101,12 +114,12 @@ services:
       postgres: { condition: service_healthy }
       keys: { condition: service_completed_successfully }
       kafka-init: { condition: service_completed_successfully }
-      minio: { condition: service_healthy }
+      storage: { condition: service_healthy }
     environment:
       <<: *jvm-env
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      S3_ENDPOINT: http://minio:9000
-      S3_PUBLIC_ENDPOINT: http://localhost:9000   # presigned URLs are opened by the browser
+      S3_ENDPOINT: http://storage:9000
+      S3_PUBLIC_ENDPOINT: http://localhost:8080   # presigned URLs go through the web app (same origin)
       S3_ACCESS_KEY: naghma
       S3_SECRET_KEY: naghma-dev-secret
 
@@ -124,10 +137,10 @@ services:
       replicas: 2   # scale with: docker compose up --scale worker=4 (up to 6 = job partitions)
     depends_on:
       kafka-init: { condition: service_completed_successfully }
-      minio: { condition: service_healthy }
+      storage: { condition: service_healthy }
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      S3_ENDPOINT: http://minio:9000
+      S3_ENDPOINT: http://storage:9000
       S3_ACCESS_KEY: naghma
       S3_SECRET_KEY: naghma-dev-secret
 
@@ -138,4 +151,4 @@ services:
 
 volumes:
   pgdata:
-  miniodata:
+  storagedata:

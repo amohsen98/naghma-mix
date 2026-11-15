@@ -2,7 +2,7 @@
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
 #
 # - runs the images CI pushed to GitHub Container Registry instead of building locally
-# - puts Caddy in front for automatic HTTPS (app on $DOMAIN, uploads on s3.$DOMAIN)
+# - puts Caddy in front for automatic HTTPS
 # - closes every other port to the internet
 # - reads secrets from .env (created by infra/deploy/bootstrap.sh)
 # - sized for Oracle Cloud's Always Free Arm VM: 2 OCPU, 12 GB RAM
@@ -24,7 +24,7 @@ services:
       - ./infra/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
-    depends_on: [web, minio]
+    depends_on: [web]
 
   postgres:
     <<: *image-defaults
@@ -44,13 +44,13 @@ services:
     deploy:
       resources: { limits: { memory: 900m } }
 
-  minio:
+  storage:
     <<: *image-defaults
     ports: !reset []
     environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
-      MINIO_API_CORS_ALLOW_ORIGIN: https://${DOMAIN}
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
+      RUSTFS_CONSOLE_ENABLE: "false"
     deploy:
       resources: { limits: { memory: 600m } }
 
@@ -72,7 +72,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
-      S3_PUBLIC_ENDPOINT: https://s3.${DOMAIN}
+      S3_PUBLIC_ENDPOINT: https://${DOMAIN}
       JAVA_OPTS: "-Xmx320m -XX:+UseSerialGC"
     deploy:
       resources: { limits: { memory: 640m } }

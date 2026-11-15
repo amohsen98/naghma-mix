@@ -10,7 +10,7 @@ DJ set-prep for Western and Arabic music. Upload your library and every track ge
     │                    └─▶ mix-service       (Quarkus)  transition scoring, next track, sets, exports
     │                               │  outbox ─▶ Kafka analysis.jobs ─▶ worker × N (Python)
     │                               ◀── Kafka analysis.results ◀────────┘   BPM, key, energy, maqam
-    └──presigned PUT──▶ MinIO / S3 ◀──────────────── worker downloads, then deletes the audio
+    └──presigned PUT (same origin) ──▶ RustFS / S3 ◀─── worker downloads, then deletes the audio
                      PostgreSQL: one schema per service (accounts, catalog, mix)
 ```
 
@@ -44,7 +44,7 @@ Needs Docker with Compose v2.
 docker compose up --build
 ```
 
-Open http://localhost:8080 and create an account. The first build downloads Maven and npm dependencies and takes a few minutes. The MinIO console is at http://localhost:9001 (`naghma` / `naghma-dev-secret`).
+Open http://localhost:8080 and create an account. The first build downloads Maven and npm dependencies and takes a few minutes. The storage console (RustFS) is at http://localhost:9001 (`naghma` / `naghma-dev-secret`).
 
 New accounts start on the Free plan. To try the set builder, open **Plans** and upgrade: in development the payment step confirms instantly. Its webhook is still HMAC-signed and verified, so the real flow is exercised.
 
@@ -52,7 +52,7 @@ New accounts start on the Free plan. To try the set builder, open **Plans** and 
 
 ```bash
 # infrastructure only
-docker compose up -d postgres kafka kafka-init minio keys
+docker compose up -d postgres kafka kafka-init storage keys
 
 # a service with live reload (repeat for catalog-service and mix-service)
 cd backend/accounts-service && mvn quarkus:dev

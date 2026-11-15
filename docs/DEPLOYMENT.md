@@ -34,7 +34,6 @@ push to main ─▶ CI (build + test everything) ─▶ Deploy: build Arm64 imag
 
 1. Sign in at [duckdns.org](https://www.duckdns.org) with GitHub.
 2. Add a subdomain, e.g. `naghma`, and set its IP to the server's public IP.
-3. DuckDNS also resolves every name under it, so `s3.naghma.duckdns.org` (used for uploads) works with no extra setup.
 
 ## 3. Prepare the server (one command)
 

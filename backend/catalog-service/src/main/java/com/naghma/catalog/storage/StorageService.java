@@ -21,7 +21,7 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /**
- * S3-compatible storage (MinIO in development). Browsers upload straight to storage with
+ * S3-compatible storage (RustFS in development). Browsers upload straight to storage with
  * short-lived presigned URLs, so audio never passes through the service.
  */
 @ApplicationScoped

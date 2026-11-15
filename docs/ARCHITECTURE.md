@@ -6,7 +6,7 @@
     │                            └─▶ mix-service       scoring, next track, sets, exports
     │                                       │ outbox ─▶ Kafka analysis.jobs ─▶ worker × N
     │                                       ◀── Kafka analysis.results ◀──────────┘
-    └──presigned PUT──▶ MinIO / S3 ◀──────────────── worker downloads, then deletes the audio
+    └──presigned PUT (same origin) ──▶ RustFS / S3 ◀─── worker downloads, then deletes the audio
 ```
 
 ## Request flows
@@ -14,7 +14,7 @@
 **Upload and analysis**
 
 1. The browser hashes each file (SHA-256) and asks `catalog-service` for upload slots. Files already in the library are reported as duplicates and never uploaded again; the monthly plan quota is checked here.
-2. The browser PUTs each file straight to object storage with a presigned URL valid for 15 minutes.
+2. The browser PUTs each file to object storage with a presigned URL valid for 15 minutes. The URL points at the app's own origin (`/naghma-audio/…`), and nginx forwards it to storage unchanged, so the browser needs no CORS rules.
 3. The browser confirms. The catalog checks the stored object's size, then marks the track `QUEUED` and writes the job message to the **outbox table in the same transaction**.
 4. A scheduled relay sends outbox rows to Kafka (`FOR UPDATE SKIP LOCKED`, so several catalog instances can relay without duplicates).
 5. A worker analyzes the file, publishes the result to `analysis.results`, deletes the audio, and only then commits its Kafka offset.
@@ -49,7 +49,7 @@ Reasons come back as codes with arguments (`{"code":"sharedNotes","args":{"share
 
 ## Design decisions
 
-- **Audio never passes through the services.** Browsers PUT straight to object storage with 15-minute presigned URLs. The worker deletes the file after analysis unless the user chose to keep it.
+- **Audio never passes through the services.** Browsers PUT to object storage with 15-minute presigned URLs (proxied by nginx on the same origin, never by a Java service). The worker deletes the file after analysis unless the user chose to keep it.
 - **Transactional outbox.** Queuing a job writes the track status and the Kafka message in one database transaction. A relay sends it with `FOR UPDATE SKIP LOCKED`, so a crash can't lose a job and several catalog instances can run side by side.
 - **At-least-once, idempotent.** The worker commits offsets only after publishing a result; the catalog applies a result only while its job is still pending.
 - **Corrections win.** Fields a DJ edits are recorded in `edited_fields` and are never overwritten by re-analysis.

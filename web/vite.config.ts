@@ -18,6 +18,8 @@ export default defineConfig({
       '/api/admin': catalog,
       '/api/mix': mix,
       '/api/sets': mix,
+      // presigned uploads: same origin, Host header kept so the S3 signature matches
+      '/naghma-audio': { target: 'http://localhost:9000', changeOrigin: false },
     },
   },
 });
