@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Quarkus)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Generate JWT keys for tests
+        run: sh infra/gen-keys.sh
+      # @QuarkusTest starts PostgreSQL and Kafka through Dev Services (Docker is available on the runner)
+      - name: Build and test
+        run: mvn -B -ntp -f backend/pom.xml verify
+
+  worker:
+    name: Worker (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: worker/requirements.txt
+      - run: pip install -r requirements.txt pytest
+      - run: python -m pytest -q
+
+  web:
+    name: Web (React)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: npm run build
+
+  compose:
+    name: Compose files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config --quiet
+      - name: Production overlay
+        run: |
+          printf 'DOMAIN=example.org\nPOSTGRES_PASSWORD=x\nS3_ACCESS_KEY=x\nS3_SECRET_KEY=x\nBILLING_WEBHOOK_SECRET=x\n' > ci.env
+          docker compose --env-file ci.env -f docker-compose.yml -f docker-compose.prod.yml config --quiet
