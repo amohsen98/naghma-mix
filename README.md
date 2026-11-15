@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/amohsen98/naghma-mix/actions/workflows/ci.yml/badge.svg)](https://github.com/amohsen98/naghma-mix/actions/workflows/ci.yml)
 
-DJ set-prep for Western and Arabic music. Upload your library and every track gets tagged with BPM, energy and key (Camelot). Arabic tracks also get their **maqam and tonic**, quarter tones included. The app then suggests what to play next and orders whole sets that flow, for Western, Arabic or mixed crowds.
+DJ set-prep for Western and Arabic music. Upload your library and every track gets tagged with BPM, energy and key (Camelot). Arabic tracks also get their **maqam and tonic**, quarter tones included, plus the **maqam journey** across the song (e.g. Ajam → Sikah → Ajam). When a maqam hides behind a Western key, it's shown next to it (`F#m ≈ Nahawand`). The app then suggests what to play next and orders whole sets that flow, for Western, Arabic or mixed crowds.
 
 ```
  browser ──REST──▶ nginx ──▶ accounts-service  (Quarkus)  JWT, plans, billing
@@ -103,7 +103,7 @@ The report shows top-1 accuracy, a confusion table and each song's pitch histogr
 | `POST /api/uploads` | catalog | Presigned upload URLs; duplicates detected by SHA-256 |
 | `POST /api/uploads/complete` | catalog | Confirm uploads and queue analysis |
 | `GET /api/tracks?q=&status=&tonality=&page=&size=` | catalog | Library |
-| `GET /api/tracks/{id}` | catalog | Detail: maqam candidates, pitch histogram, energy curve |
+| `GET /api/tracks/{id}` | catalog | Detail: maqam candidates, maqam journey (~30 s sections), pitch histogram, energy curve |
 | `PATCH /api/tracks/{id}/tags` | catalog | Correct tags (kept on re-analysis, logged as feedback) |
 | `POST /api/tracks/{id}/reanalyze`, `DELETE /api/tracks/{id}` | catalog | Housekeeping |
 | `GET /api/tracks/features?ids=` | catalog | Compact features for the mix service |

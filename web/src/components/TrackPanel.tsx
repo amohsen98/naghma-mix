@@ -5,6 +5,8 @@ import { duration, MAQAM_TONICS, MAQAMAT, NOTE_CHOICES, num, pct } from '../lib/
 import { useI18n } from '../lib/i18n';
 import type { TrackDetail, TrackView } from '../lib/types';
 import { EnergyLine, PitchHistogram } from './Charts';
+import { hiddenMaqam, showJourney } from '../lib/maqamHints';
+import { MaqamJourney } from './MaqamJourney';
 import { HarmonicTag } from './Tags';
 
 const PC_NAMES = NOTE_CHOICES;
@@ -91,6 +93,7 @@ export function TrackPanel({ id, onClose, onChanged }: { id: string; onClose: ()
 
   const set = (k: string) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const tr = detail?.track;
+  const hint = tr && detail ? hiddenMaqam(tr, detail.maqamCandidates) : null;
 
   return (
     <aside className="panel" aria-label={t('details')}>
@@ -108,7 +111,14 @@ export function TrackPanel({ id, onClose, onChanged }: { id: string; onClose: ()
       {tr && tr.status === 'DONE' && detail && (
         <>
           <dl className="facts">
-            <div><dt>{t('tonality')}</dt><dd><HarmonicTag track={tr} /></dd></div>
+            <div><dt>{t('tonality')}</dt><dd className="harmonic">
+              <HarmonicTag track={tr} />
+              {hint && (
+                <span className="tag tag-hint" title={t('hiddenMaqamHint', { m: maqamName(hint.name) })} aria-label={t('hiddenMaqam', { m: maqamName(hint.name) })}>
+                  ≈ {maqamName(hint.name)}
+                </span>
+              )}
+            </dd></div>
             <div><dt>{t('bpm')}</dt><dd>{num(tr.bpm, 1)}</dd></div>
             <div><dt>{t('energy')}</dt><dd>{pct(tr.energy)}</dd></div>
             <div><dt>{t('duration')}</dt><dd>{duration(tr.durationSec)}</dd></div>
@@ -117,7 +127,17 @@ export function TrackPanel({ id, onClose, onChanged }: { id: string; onClose: ()
 
           <button className="btn btn-wide" onClick={() => navigate(`/next/${tr.id}`)}>{t('suggestNext')}</button>
 
-          {detail.maqamCandidates?.length > 0 && tr.tonality === 'ARABIC_MODAL' && (
+          {hint && <p className="muted small">{t('hiddenMaqamHint', { m: maqamName(hint.name) })}</p>}
+
+          {showJourney(tr, detail.maqamTimeline, hint) && (
+            <section>
+              <h3>{t('maqamJourney')}</h3>
+              <MaqamJourney sections={detail.maqamTimeline} />
+              <p className="muted small">{t('maqamJourneyHint')}</p>
+            </section>
+          )}
+
+          {detail.maqamCandidates?.length > 0 && (tr.tonality === 'ARABIC_MODAL' || hint) && (
             <section>
               <h3>{t('candidates')}</h3>
               <ul className="candidates">

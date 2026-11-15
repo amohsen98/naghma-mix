@@ -56,6 +56,18 @@ export interface Candidate {
   confidence: number;
 }
 
+/** One stretch of the song in a single maqam; maqam is null where there is no clear melody. */
+export interface MaqamSection {
+  start: number;
+  end: number;
+  maqam: string | null;
+  arabic: string | null;
+  tonicNote: string | null;
+  tonicCents: number | null;
+  confidence: number;
+  uncertain: boolean;
+}
+
 export interface TrackDetail {
   track: TrackView;
   energyCurve: EnergyPoint[];
@@ -64,6 +76,7 @@ export interface TrackDetail {
   tonicCents: number | null;
   quarterToneRatio: number | null;
   pitchHistogram: number[];
+  maqamTimeline: MaqamSection[];
   modelVersion: string | null;
 }
 

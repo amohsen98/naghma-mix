@@ -32,6 +32,10 @@
 4. Correlate it with templates for Rast, Bayati, Saba, Sikah, Hijaz, Nahawand, Kurd and Ajam at all 120 tonic rotations. The best rotation gives the tonic; a softmax over scores gives the top 3 with confidence.
 5. Decide Western vs Arabic-modal from the share of notes that sit a quarter tone off the recording's own tuning grid, plus distinctive intervals (Hijaz, Saba). Below the confidence threshold the result is marked **uncertain** instead of guessed.
 
+**Maqam journey.** Arabic songs often modulate: a verse in Ajam, a couplet in Sikah, back to Ajam. The worker pitch-tracks the whole song once (up to 8 minutes), classifies each ~30 s window on its own, and merges neighbouring windows that agree on the maqam and its tonic (within 30 cents). A short tail is folded into the last window. Windows with too little stable melody (rap verses, drum breaks, intros) are stored as "no melody" instead of a guess. The overall label still comes from the middle 90 s. The journey is stored as JSONB in `catalog.analyses.maqam_timeline` (Flyway V2); analyses made before V2 get it on re-analysis.
+
+**Hidden maqam next to the key.** When a track is tagged Western but its top candidates include Nahawand or Kurd (minor key), Ajam (major key) or Hijaz (either) at 30% or more, the app shows it beside the Camelot tag, e.g. `11A F#m ≈ Nahawand`, so the maqam isn't lost behind the key.
+
 Known limits: dense modern productions (autotune, synth pads, mahraganat) are harder than tarab and sha'bi. Maqamat without quarter tones (Nahawand, Kurd, Ajam) are indistinguishable from Western minor/Phrygian/major by pitch alone, so they are tagged Western with the maqam kept as a candidate. Every DJ correction is stored in `catalog.corrections`, to become the labelled dataset for a trained classifier.
 
 ## Transition scoring

@@ -55,7 +55,16 @@ function histogram(t) {
   return bins.map((b) => b / s);
 }
 
+// Egyptian tracks tagged with a Western key, where a maqam hides behind the minor scale.
+const ARAB_POP = new Set(['Wegz', 'Hassan Shakosh']);
 const view = ({ _tonicCents, ...t }) => t;
+// An Ajam → Sikah → Ajam journey for Arabic tracks, with a drum break that has no melody.
+const journey = (t) => {
+  const d = t.durationSec || 200;
+  const s = (a, b, maqam, arabic, note, cents) => ({ start: a, end: b, maqam, arabic, tonicNote: note, tonicCents: cents, confidence: maqam ? 0.62 : 0, uncertain: !maqam });
+  if (!t.maqam) return [s(0, d, null, null, null, null)];
+  return [s(0, 60, t.maqam, '', t.tonicNote, t._tonicCents), s(60, 90, 'Sikah', 'سيكاه', 'E half-flat', 350), s(90, 120, null, null, null, null), s(120, d, t.maqam, '', t.tonicNote, t._tonicCents)];
+};
 const summary = (t) => ({ id: t.id, title: t.title, artist: t.artist, bpm: t.bpm, energy: t.energy, tonality: t.tonality, camelot: t.camelot, maqam: t.maqam, harmonicLabel: t.maqam ? `${t.maqam} on ${t.tonicNote}` : `${NOTES[t.keyTonicPc]} ${t.keyMode}` });
 const transition = (a, b) => {
   const harmony = a.maqam && b.maqam && a.maqam === b.maqam ? 1 : a.camelot === b.camelot ? 1 : 0.6 + ((a.bpm + b.bpm) % 5) / 15;
@@ -106,7 +115,7 @@ createServer(async (req, res) => {
     if (m) {
       const t = tracks.find((x) => x.id === m[1]);
       const curve = Array.from({ length: 8 }, (_, k) => ({ start: k * 24, end: (k + 1) * 24, energy: Math.max(0.1, Math.min(1, t.energy + Math.sin(k) * 0.15)) }));
-      return json(res, 200, { track: view(t), energyCurve: curve, maqamCandidates: t.maqam ? [{ name: t.maqam, arabic: '', confidence: 0.78 }, { name: 'Kurd', arabic: '', confidence: 0.12 }, { name: 'Saba', arabic: '', confidence: 0.06 }] : [], tonicHz: 146.8, tonicCents: t.maqam ? t._tonicCents : t.keyTonicPc * 100, quarterToneRatio: 0.2, pitchHistogram: histogram(t), modelVersion: 'mock' });
+      return json(res, 200, { track: view(t), energyCurve: curve, maqamCandidates: t.maqam ? [{ name: t.maqam, arabic: '', confidence: 0.78 }, { name: 'Kurd', arabic: '', confidence: 0.12 }, { name: 'Saba', arabic: '', confidence: 0.06 }] : ARAB_POP.has(t.artist) ? (t.keyMode === 'minor' ? [{ name: 'Nahawand', arabic: '', confidence: 0.41 }, { name: 'Ajam', arabic: '', confidence: 0.3 }] : [{ name: 'Ajam', arabic: '', confidence: 0.44 }, { name: 'Nahawand', arabic: '', confidence: 0.28 }]) : [], tonicHz: 146.8, tonicCents: t.maqam ? t._tonicCents : t.keyTonicPc * 100, quarterToneRatio: 0.2, pitchHistogram: histogram(t), maqamTimeline: journey(t), modelVersion: 'mock' });
     }
     m = p.match(/^\/api\/mix\/next\/([^/]+)$/);
     if (m) {
